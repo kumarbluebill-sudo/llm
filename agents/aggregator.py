@@ -40,7 +40,9 @@ def aggregate(manifest: Manifest, opts: PricedOptions) -> Itinerary:
     unverified = not (q.outbound.refundable_known and q.inbound.refundable_known and q.hotel.refundable_known)
     if data_source == "sample" and opts.forecast.rain_probability >= 0.6:  # only sample weather exists
         warnings.append(f"Weather advisory for {ev.venue}: {opts.forecast.summary}")
-    if data_source != "sample":
+    if opts.route.source == "mapbox":
+        warnings.append("Transfer time is from Mapbox driving directions; the fare is a per-km estimate")
+    elif data_source != "sample":
         warnings.append("Transfer costs are sample estimates; flight and hotel prices are live Google results")
     if unverified:
         warnings.append("Refundability could not be verified for live fares/hotels: check cancellation terms before booking")

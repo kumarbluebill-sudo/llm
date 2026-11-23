@@ -42,6 +42,8 @@ class Route(BaseModel):
     venue: str
     minutes: int
     cost_inr: int  # per vehicle, one way
+    source: str = "mock"  # mock | mapbox (time/distance real, fare estimated)
+    note: str | None = None
 
 
 class Forecast(BaseModel):

@@ -3,6 +3,7 @@ names mirror the MCP tools in the spec; an MCP transport wrapper can be added on
 import os
 from datetime import date
 
+from mcp_servers.mapbox import HybridRoutes, MapboxClient, MapboxRoutes
 from mcp_servers.mock_suppliers import (
     MockActivities,
     MockFlights,
@@ -78,4 +79,7 @@ def build_toolbox() -> Toolbox:
     if serp is not None:  # live Google prices (search only); 1 hour cache keeps the 250/month quota alive
         tb._flights = Guarded(HybridFlights(SerpApiFlights(serp)), cache_ttl=3600, retries=0)
         tb._hotels = Guarded(HybridHotels(SerpApiHotels(serp)), cache_ttl=3600, retries=0)
+    mb = MapboxClient.from_env() if os.getenv("MAPBOX_LIVE", "1") != "0" else None
+    if mb is not None:  # real driving time; routes never change, so cache for a day
+        tb._transport = Guarded(HybridRoutes(MapboxRoutes(mb)), cache_ttl=86400, retries=0)
     return tb

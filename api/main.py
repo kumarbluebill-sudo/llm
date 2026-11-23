@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from agents.aggregator import aggregate
-from agents.llm import AnthropicLLM, LLMClient, MockLLM
+from agents.llm import AnthropicLLM, LLMClient, MockLLM, OpenAICompatLLM
 from agents.planner import PlannerError, plan
 from agents.pricer import PricingError, price
 from api.config import load_env
@@ -30,7 +30,7 @@ from saga.reconcile import run_reconciliation
 from saga.service import BookingService, build_service, status
 
 load_env()  # local env files; real environment variables win
-app = FastAPI(title="Travel LLM", version="0.9.0")
+app = FastAPI(title="Travel LLM", version="0.10.0")
 app.add_middleware(
     CORSMiddleware,
     # Comma-separated origins, e.g. the Netlify site. Local dev uses the Vite proxy.
@@ -41,8 +41,13 @@ app.add_middleware(
 
 
 def get_llm() -> LLMClient:
-    # LLM_PROVIDER=anthropic switches to the real model; default is the mock.
-    return AnthropicLLM() if os.getenv("LLM_PROVIDER") == "anthropic" else MockLLM()
+    # LLM_PROVIDER=anthropic | freellm switches to a real model; default is the mock.
+    provider = os.getenv("LLM_PROVIDER")
+    if provider == "anthropic":
+        return AnthropicLLM()
+    if provider == "freellm":
+        return OpenAICompatLLM.from_env()
+    return MockLLM()
 
 
 @lru_cache(maxsize=1)

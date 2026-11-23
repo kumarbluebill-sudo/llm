@@ -37,7 +37,7 @@ export function describe(s: Segment): Card {
       return {
         label: d.direction === "in" ? "Transfer in" : "Transfer out",
         title: `${str(d.airport)} ⇄ ${str(d.venue)}`,
-        lines: [`About ${str(d.minutes)} min by road`],
+        lines: [`About ${str(d.minutes)} min by road${d.source === "mapbox" ? " (Mapbox)" : ""}`, ...(d.note ? [str(d.note)] : [])],
       };
     case "event":
       return { label: "Event", title: str(d.name), lines: [`${str(d.venue)} · ${str(d.date)}`] };

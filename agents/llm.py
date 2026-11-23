@@ -33,6 +33,57 @@ class AnthropicLLM:
         return "".join(b.text for b in msg.content if b.type == "text")
 
 
+class LLMError(Exception):
+    """The model endpoint failed (network, quota, upstream error). Never carries credentials."""
+
+
+class OpenAICompatLLM:
+    """Any OpenAI-compatible /chat/completions endpoint, e.g. the local FreeLLMAPI proxy.
+    Free upstream models are flaky (empty/truncated output, timeouts); the planner's validate-and-
+    retry loop is what makes them usable, and the eval harness measures how well."""
+
+    def __init__(self, base_url: str, api_key: str, model: str, transport=None, max_tokens: int = 900, timeout: float = 120):
+        from mcp_servers.http import urllib_transport
+
+        self._base, self._key, self._model = base_url.rstrip("/"), api_key, model
+        self._transport, self._max_tokens, self._timeout = transport or urllib_transport, max_tokens, timeout
+
+    @classmethod
+    def from_env(cls, **kw) -> "OpenAICompatLLM":
+        base, key = os.getenv("FREELLMAPI_BASE_URL"), os.getenv("FREELLMAPI_API_KEY")
+        if not base or not key:
+            raise LLMError("FREELLMAPI_BASE_URL / FREELLMAPI_API_KEY are not set")
+        return cls(base, key, os.getenv("FREELLMAPI_MODEL", "auto"), **kw)
+
+    def complete(self, system: str, user: str) -> str:
+        from mcp_servers.http import HttpError
+
+        body = {
+            "model": self._model, "temperature": 0, "max_tokens": self._max_tokens,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        }  # fmt: skip
+        headers = {"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"}
+        try:
+            try:
+                status, data = self._transport("POST", f"{self._base}/chat/completions", headers, body, self._timeout)
+            except TypeError:  # injected transports (tests) may not take a timeout
+                status, data = self._transport("POST", f"{self._base}/chat/completions", headers, body)
+        except HttpError as e:
+            raise LLMError(str(e).replace(self._key, "***")) from None
+        if status != 200 or not isinstance(data, dict):
+            detail = ""
+            if isinstance(data, dict):
+                detail = str((data.get("error") or {}).get("message", ""))[:120]
+            raise LLMError(f"llm http {status} {detail}".replace(self._key, "***").strip())
+        try:
+            text = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            raise LLMError("llm returned no choices") from None
+        if not isinstance(text, str) or not text.strip():
+            raise LLMError("llm returned empty content")
+        return text
+
+
 _MONTHS = {
     m: i
     for i, m in enumerate(

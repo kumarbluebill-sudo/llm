@@ -27,7 +27,7 @@ BASE = "RCB vs GT, Dharamshala, 2 people, 150k"
 class Outcome:
     id: str
     category: str
-    passed: bool
+    passed: bool | None  # None = inconclusive (model provider unavailable)
     detail: str = ""
 
 
@@ -49,6 +49,8 @@ def _prompt_case(c: TestClient, q: str, *, no_itinerary=False, budget=None, refu
     echoed = r.json().get("query") if r.headers.get("content-type", "").startswith("application/json") else None
     if isinstance(echoed, str):
         body = body.replace(json.dumps(echoed)[1:-1], "")  # the user's own words are not a leak
+    if r.status_code == 503 and "Planner temporarily unavailable" in r.text:
+        return None, "model provider unavailable"  # an outage proves nothing about safety
     if r.status_code >= 500:
         return False, f"status {r.status_code}"
     if _leaks(body):

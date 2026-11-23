@@ -76,3 +76,18 @@ def test_red_team_all_pass():
     assert len(out) == 45 and len(PROMPT_CASES) + 16 == 45
     failed = [(o.id, o.detail) for o in out if not o.passed]
     assert not failed, failed
+
+
+def test_eval_cli_never_uses_live_supplier_quota(monkeypatch):
+    from evals.run import force_offline_suppliers
+    from mcp_servers.toolbox import build_toolbox
+
+    monkeypatch.setenv("SERPAPI_API_KEY", "would-spend-quota")
+    monkeypatch.setenv("VIATOR_SANDBOX_KEY", "would-spend-quota")
+    for k in ("SERPAPI_LIVE", "VIATOR_LIVE", "MAPBOX_LIVE"):
+        monkeypatch.setenv(k, "1")  # registers the variable so monkeypatch restores it afterwards
+    force_offline_suppliers()
+    tb = build_toolbox()
+    # No live clients were created: the flights/hotels guards wrap plain mocks.
+    assert type(tb._flights.targets[0][1]).__name__ == "MockFlights"
+    assert type(tb._activities.targets[0][1]).__name__ == "MockActivities"

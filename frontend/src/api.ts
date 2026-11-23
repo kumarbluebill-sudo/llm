@@ -29,7 +29,7 @@ export function streamPlan(query: string, h: Handlers): () => void {
     if (finished) return;
     const data = (e as MessageEvent).data;
     finish();
-    h.onError(data ? JSON.parse(data).message : "Connection to the planner was lost.");
+    h.onError(data ? JSON.parse(data).message : "The planner service is not reachable right now. If you are viewing the public demo, the backend has not been deployed yet.");
   });
   return finish;
 }

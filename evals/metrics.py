@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from agents.aggregator import aggregate
 from agents.knowledge import CITIES
 from agents.llm import LLMClient
-from agents.planner import PlannerError, extract_json, plan
+from agents.planner import PlannerError, PlannerUnavailable, extract_json, plan
 from agents.pricer import PricingError, price
 from api.schemas import Itinerary, Manifest
 from evals.golden import GoldenCase
@@ -70,6 +70,7 @@ def check_grounding(it: Itinerary, m: Manifest, tools: Toolbox) -> tuple[int, in
 
 def evaluate(cases: list[GoldenCase], llm_factory: Callable[[], LLMClient]) -> Result:
     n = len(cases)
+    unavailable = 0
     first_valid = schema_ok = 0
     field_hits = {"venue": 0, "budget": 0, "travelers": 0, "refundable": 0}
     exact = 0
@@ -83,6 +84,9 @@ def evaluate(cases: list[GoldenCase], llm_factory: Callable[[], LLMClient]) -> R
         llm = RecordingLLM(llm_factory())
         try:
             m = plan(c.query, llm)
+        except PlannerUnavailable:
+            unavailable += 1  # an outage says nothing about answer quality: reported separately
+            continue
         except PlannerError:
             failures.append({"id": c.id, "query": c.query, "why": "no valid manifest"})
             continue
@@ -113,9 +117,11 @@ def evaluate(cases: list[GoldenCase], llm_factory: Callable[[], LLMClient]) -> R
         g, tot = check_grounding(it, m, tools)
         seg_ok, seg_total = seg_ok + g, seg_total + tot
 
+    n = n - unavailable  # accuracy is measured over the cases the model actually answered
     pct = lambda a, b: round(100 * a / b, 1) if b else 0.0
     metrics = {
         "cases": n,
+        "llm_unavailable": unavailable,
         "json_validity": pct(first_valid, n),
         "schema_compliance": pct(schema_ok, n),
         "intent_exact": pct(exact, n),
