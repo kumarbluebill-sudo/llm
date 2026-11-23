@@ -17,18 +17,20 @@ from agents.aggregator import aggregate
 from agents.llm import AnthropicLLM, LLMClient, MockLLM
 from agents.planner import PlannerError, plan
 from agents.pricer import PricingError, price
+from api.config import load_env
 from api.safety import MAX_QUERY_CHARS, looks_like_pan, redact_pan
 from api.schemas import Itinerary, PlanRequest, PlanResponse
 from disruption.manager import DisruptionManager
 from disruption.models import DisruptionSignal, SignalType, Trip
 from disruption.notify import RecordingSender
 from mcp_servers.resilience import SupplierUnavailable
-from mcp_servers.toolbox import Toolbox, mock_toolbox
+from mcp_servers.toolbox import Toolbox, build_toolbox
 from saga.models import BookingRequest
 from saga.reconcile import run_reconciliation
 from saga.service import BookingService, build_service, status
 
-app = FastAPI(title="Travel LLM", version="0.7.0")
+load_env()  # local env files; real environment variables win
+app = FastAPI(title="Travel LLM", version="0.8.0")
 app.add_middleware(
     CORSMiddleware,
     # Comma-separated origins, e.g. the Netlify site. Local dev uses the Vite proxy.
@@ -45,8 +47,8 @@ def get_llm() -> LLMClient:
 
 @lru_cache(maxsize=1)
 def get_toolbox() -> Toolbox:
-    # Mock suppliers until real supplier credentials exist.
-    return mock_toolbox()
+    # Mock flights/hotels until real supplier credentials exist; live activities if Viator is configured.
+    return build_toolbox()
 
 
 QUOTE_TTL_S = 30 * 60  # doc: QUOTED state lives 15-30 min

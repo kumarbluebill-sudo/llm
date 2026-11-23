@@ -41,6 +41,7 @@ class TripNode(BaseModel):
     min_gap_min: int = 0  # required gap after the latest predecessor ends
     fixed: bool = False  # fixed-time nodes (event, flights) cannot slide
     ref: str | None = None  # offer_id for flights
+    flight_iata: str | None = None  # real flight number (e.g. 6E329) once known; enables live polling
     carrier: str | None = None
     price: int = 0  # per-passenger fare (flights)
     latest_start: datetime | None = None  # hotel late check-in cutoff

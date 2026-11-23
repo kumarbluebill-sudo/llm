@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getBooking, sendApproval, startBooking, streamPlan } from "./api";
 import { describe, inr } from "./format";
-import type { BookingStatus, Itinerary, Manifest, Stage, Tier } from "./types";
+import type { BookingStatus, Itinerary, Manifest, Stage, Suggestion, Tier } from "./types";
 
 const EXAMPLES = [
   "RCB vs GT, Dharamshala, 2 people, 25k",
@@ -144,6 +144,8 @@ function ItineraryView({ it }: { it: Itinerary }) {
         </ul>
       )}
 
+      {it.suggestions.length > 0 && <Suggestions items={it.suggestions} />}
+
       <BookingPanel it={it} />
     </section>
   );
@@ -247,5 +249,30 @@ function BookingPanel({ it }: { it: Itinerary }) {
         </div>
       )}
     </div>
+  );
+}
+
+function Suggestions({ items }: { items: Suggestion[] }) {
+  const hours = (m: number | null) => (m ? (m >= 60 ? `${(m / 60).toFixed(m % 60 ? 1 : 0)} h` : `${m} min`) : null);
+  return (
+    <section aria-label="Things to do">
+      <h2 className="section-title">Things to do</h2>
+      <div className="cards">
+        {items.map((s) => (
+          <article className="card" key={s.code}>
+            <span className="label">{s.source === "viator" ? "Viator" : "Sample"}</span>
+            <h3>{s.title}</h3>
+            <p>{[hours(s.duration_min), s.rating ? `★ ${s.rating.toFixed(1)}${s.reviews ? ` (${s.reviews})` : ""}` : null].filter(Boolean).join(" · ")}</p>
+            <footer>
+              <span>from {inr(s.from_price)}</span>
+              {s.url?.startsWith("https://") && (
+                <a href={s.url} target="_blank" rel="noopener noreferrer sponsored">View</a>
+              )}
+            </footer>
+          </article>
+        ))}
+      </div>
+      <small className="muted">Not included in the total. Booked on the provider's site.</small>
+    </section>
   );
 }

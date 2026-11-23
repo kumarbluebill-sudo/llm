@@ -53,6 +53,21 @@ class BookingAction(BaseModel):
     action: str
 
 
+class Suggestion(BaseModel):
+    """Optional things to do. Not part of the total and not bookable through our saga."""
+
+    code: str
+    title: str
+    from_price: int
+    currency: str = "INR"
+    duration_min: int | None = None
+    rating: float | None = None
+    reviews: int | None = None
+    url: str | None = None
+    image: str | None = None
+    source: str
+
+
 class Itinerary(BaseModel):
     """Aggregator output (doc section 6.3)."""
 
@@ -66,6 +81,7 @@ class Itinerary(BaseModel):
     segments: list[Segment]
     warnings: list[str] = []
     booking_actions: list[BookingAction] = []
+    suggestions: list[Suggestion] = []
 
 
 class PlanRequest(BaseModel):

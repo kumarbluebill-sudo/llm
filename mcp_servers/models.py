@@ -43,3 +43,18 @@ class Forecast(BaseModel):
     day: date
     summary: str
     rain_probability: float
+
+
+class Activity(BaseModel):
+    """A bookable-elsewhere experience (tour, activity). Suggested, never part of the saga."""
+
+    product_code: str
+    title: str
+    from_price: int  # INR, per person, "from" price (not a quote)
+    currency: str = "INR"
+    duration_min: int | None = None
+    rating: float | None = None
+    reviews: int | None = None
+    url: str | None = None
+    image: str | None = None
+    source: str = "mock"

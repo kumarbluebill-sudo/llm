@@ -17,6 +17,19 @@ export interface Segment {
   cost: number;
 }
 
+export interface Suggestion {
+  code: string;
+  title: string;
+  from_price: number;
+  currency: string;
+  duration_min: number | null;
+  rating: number | null;
+  reviews: number | null;
+  url: string | null;
+  image: string | null;
+  source: string;
+}
+
 export interface Itinerary {
   itinerary_id: string;
   summary: string;
@@ -28,6 +41,7 @@ export interface Itinerary {
   segments: Segment[];
   warnings: string[];
   booking_actions: { label: string; action: string }[];
+  suggestions: Suggestion[];
 }
 
 export type Stage = "idle" | "planning" | "pricing" | "done" | "error";

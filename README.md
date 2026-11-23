@@ -32,6 +32,12 @@ After a booking is `TICKETED`: `POST /disrupt/{booking_id}` with `{"type": "CANC
 runs triage, impact analysis, held rebooking options, entitlements and notification; then
 `POST /disruption/{case_id}/choose` (or `/dismiss`). In-process mode only.
 
+## Live data (optional)
+
+Put keys in `env.local` (git-ignored): `VIATOR_SANDBOX_KEY` gives real activity suggestions; `AVIATIONSTACK_API`
+enables live flight-status polling (free plan: ~100 requests/month, the client enforces a budget).
+`RUN_LIVE_TESTS=1 pytest tests/test_live_data.py` runs the opt-in live checks.
+
 ## Evaluation and tracing
 
 `python -m evals.run` runs the golden set and red-team checks (see docs/EVAL.md for how to read the results).

@@ -3,7 +3,8 @@ from datetime import timedelta
 
 from agents.knowledge import AIRPORTS
 from api.schemas import Manifest
-from mcp_servers.models import FlightOffer, Forecast, HotelOffer, Route
+from mcp_servers.models import Activity, FlightOffer, Forecast, HotelOffer, Route
+from mcp_servers.resilience import SupplierUnavailable
 from mcp_servers.toolbox import Toolbox
 
 
@@ -21,6 +22,7 @@ class PricedOptions:
     route: Route
     forecast: Forecast
     notes: list[str] = field(default_factory=list)
+    activities: list[Activity] = field(default_factory=list)
 
 
 def _verified_flights(
@@ -55,6 +57,11 @@ def price(manifest: Manifest, tools: Toolbox) -> PricedOptions:
     hotels = tools.search_hotels(venue, manifest.constraints.refundable_only)
     if not (outbound and inbound and hotels):
         raise PricingError("no options satisfy the constraints (flights/hotels)")
+    try:  # suggestions are optional: never let them break pricing
+        activities = tools.search_activities(venue)
+    except SupplierUnavailable:
+        activities = []
+        notes.append("Activity suggestions are temporarily unavailable")
     return PricedOptions(
         origin=origin,
         nights=(back_day - out_day).days,
@@ -64,4 +71,5 @@ def price(manifest: Manifest, tools: Toolbox) -> PricedOptions:
         route=tools.get_route(AIRPORTS[venue], venue),
         forecast=tools.forecast(venue, event_day),
         notes=notes,
+        activities=activities,
     )

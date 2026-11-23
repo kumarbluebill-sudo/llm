@@ -2,7 +2,7 @@
 import zlib
 from datetime import date
 
-from mcp_servers.models import FareRules, FlightOffer, Forecast, HotelOffer, Route
+from mcp_servers.models import Activity, FareRules, FlightOffer, Forecast, HotelOffer, Route
 
 # Listing flag vs. authoritative fare rule. Index 1 is a trap: listed refundable, actually not.
 _LISTED_REFUNDABLE = [False, True, True, True]
@@ -95,3 +95,24 @@ class MockWeather(_Flaky):
         rain = (_seed(venue, day.isoformat()) % 100) / 100
         summary = "Rain likely" if rain >= 0.6 else "Mostly clear"
         return Forecast(venue=venue, day=day, summary=summary, rain_probability=rain)
+
+
+class MockActivities(_Flaky):
+    def search_activities(self, venue: str, limit: int = 6) -> list[Activity]:
+        self._maybe_fail()
+        kinds = ["Heritage walk", "Local food tour", "Sunrise viewpoint trip", "Museum and old town"]
+        out = []
+        for i, kind in enumerate(kinds[:limit]):
+            s = _seed(venue, i)
+            out.append(
+                Activity(
+                    product_code=f"MOCK-{venue[:3].upper()}-{i}",
+                    title=f"{kind} in {venue}",
+                    from_price=800 + s % 3000,
+                    duration_min=90 + (s % 4) * 45,
+                    rating=round(4.0 + (s % 10) / 10, 1),
+                    reviews=20 + s % 400,
+                    source="mock",
+                )
+            )
+        return out

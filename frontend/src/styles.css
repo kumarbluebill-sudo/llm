@@ -109,3 +109,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .approval { margin-top: 12px; padding: 12px; background: var(--warn-bg); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
 .approval ul { width: 100%; margin: 0 0 4px; padding-left: 18px; }
 button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+
+.section-title { margin: 28px 0 10px; }
+.muted { display: block; margin-top: 8px; color: var(--muted); }
+.card footer a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.card footer a:hover { text-decoration: underline; }

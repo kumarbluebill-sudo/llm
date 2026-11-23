@@ -2,7 +2,7 @@ import uuid
 
 from agents.budget import TIERS, TierQuote, quote_tiers
 from agents.pricer import PricedOptions
-from api.schemas import BookingAction, Itinerary, Manifest, Segment
+from api.schemas import BookingAction, Itinerary, Manifest, Segment, Suggestion
 
 
 def _choose(manifest: Manifest, quotes: dict[str, TierQuote], warnings: list[str]) -> TierQuote:
@@ -18,6 +18,16 @@ def _choose(manifest: Manifest, quotes: dict[str, TierQuote], warnings: list[str
     return quotes["budget"]
 
 
+def _suggestions(opts: PricedOptions) -> list[Suggestion]:
+    ranked = sorted(opts.activities, key=lambda x: (-(x.rating or 0), x.from_price))
+    return [
+        Suggestion(code=x.product_code, title=x.title, from_price=x.from_price, currency=x.currency,
+                   duration_min=x.duration_min, rating=x.rating, reviews=x.reviews, url=x.url,
+                   image=x.image, source=x.source)
+        for x in ranked[:6]
+    ]  # fmt: skip
+
+
 def aggregate(manifest: Manifest, opts: PricedOptions) -> Itinerary:
     assert manifest.event is not None  # guaranteed by pricer
     quotes = quote_tiers(manifest, opts)
@@ -28,6 +38,8 @@ def aggregate(manifest: Manifest, opts: PricedOptions) -> Itinerary:
     if opts.forecast.rain_probability >= 0.6:
         warnings.append(f"Weather advisory for {ev.venue}: {opts.forecast.summary}")
     warnings.append("Event/match tickets are not included in the total")
+    if opts.activities:
+        warnings.append("Activity suggestions are not in the total and are booked on the provider site")
 
     refundable = manifest.constraints.refundable_only
     segments = [
@@ -53,6 +65,7 @@ def aggregate(manifest: Manifest, opts: PricedOptions) -> Itinerary:
         tier_totals={t: quotes[t].total for t in TIERS},
         segments=segments,
         warnings=warnings,
+        suggestions=_suggestions(opts),
         booking_actions=[
             BookingAction(label="Book all", action="commit_saga"),
             BookingAction(label="Book flights only", action="partial_commit"),

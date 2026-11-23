@@ -1,3 +1,7 @@
+import os
+
+os.environ["TRAVEL_LLM_NO_ENV_FILE"] = "1"  # tests never read real keys or hit live services
+
 import pytest
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
