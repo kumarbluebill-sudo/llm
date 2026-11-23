@@ -7,3 +7,4 @@ data/chroma/
 dist/
 .pytest_cache/
 .ruff_cache/
+*.egg-info/
