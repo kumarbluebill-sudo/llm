@@ -63,7 +63,7 @@ class MockFlights(_Flaky):
 
 
 class MockHotels(_Flaky):
-    def search_hotels(self, venue: str, refundable_only: bool = True) -> list[HotelOffer]:
+    def search_hotels(self, venue: str, refundable_only: bool = True, checkin=None, checkout=None) -> list[HotelOffer]:
         self._maybe_fail()
         base = 1800 + _seed(venue) % 1500
         offers = []

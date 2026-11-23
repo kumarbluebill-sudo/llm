@@ -48,6 +48,12 @@ class TripNode(BaseModel):
     extension_dependents: list[str] = []  # hotel must be extended if these break
 
 
+def _iata(details: dict) -> str | None:
+    """"6E 6201" -> "6E6201" (AviationStack format); only live data has real flight numbers."""
+    num = details.get("flight_number")
+    return str(num).replace(" ", "") if num else None
+
+
 class Trip(BaseModel):
     booking_id: str
     nodes: list[TripNode]
@@ -88,6 +94,7 @@ class Trip(BaseModel):
         nodes = [
             TripNode(id="flight_out", kind="flight", start=out_start, end=out_end, fixed=True,
                      ref=str(out.details["offer_id"]), carrier=str(out.details.get("carrier")),
+                     flight_iata=_iata(out.details),
                      price=int(out.details["price"])),
             TripNode(id="transfer_in", kind="transfer", start=tin_start, end=tin_end,
                      depends_on=["flight_out"], min_gap_min=45),
@@ -101,6 +108,7 @@ class Trip(BaseModel):
                      end=back_start + timedelta(minutes=int(back.details["duration_min"])),
                      depends_on=["transfer_out"], min_gap_min=120, fixed=True,
                      ref=str(back.details["offer_id"]), carrier=str(back.details.get("carrier")),
+                     flight_iata=_iata(back.details),
                      price=int(back.details["price"])),
         ]  # fmt: skip
         return cls(booking_id=booking_id, nodes=nodes, pax=pax,

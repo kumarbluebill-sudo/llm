@@ -15,12 +15,16 @@ class FlightOffer(BaseModel):
     depart: str = "09:00"  # local HH:MM
     duration_min: int = 90
     carrier: str = "IndiGo"
+    flight_number: str | None = None  # e.g. "6E 6201" (live data only)
+    refundable_known: bool = True  # False when the data source has no fare rules
+    source: str = "mock"  # mock | serpapi
 
 
 class FareRules(BaseModel):
     offer_id: str
     refundable: bool  # authoritative; may differ from the listing
     cancellation_fee: int
+    known: bool = True  # False = the source cannot tell us
 
 
 class HotelOffer(BaseModel):
@@ -29,6 +33,8 @@ class HotelOffer(BaseModel):
     stars: int
     nightly_price: int  # INR per room per night
     refundable: bool
+    refundable_known: bool = True
+    source: str = "mock"
 
 
 class Route(BaseModel):

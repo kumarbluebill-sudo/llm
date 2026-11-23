@@ -82,6 +82,9 @@ class Itinerary(BaseModel):
     warnings: list[str] = []
     booking_actions: list[BookingAction] = []
     suggestions: list[Suggestion] = []
+    data_source: Literal["sample", "mixed", "live"] = "sample"
+    bookable: bool = True
+    bookable_reason: str | None = None
 
 
 class PlanRequest(BaseModel):

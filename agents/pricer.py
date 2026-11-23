@@ -32,8 +32,13 @@ def _verified_flights(
     offers = tools.search_flights(origin, dest, day, c.refundable_only)
     kept = [o for o in offers if o.layovers <= c.max_layovers]
     if c.refundable_only:
-        # The listing can be wrong; fare rules are authoritative.
-        verified = [o for o in kept if tools.get_fare_rules(o.offer_id).refundable]
+        # The listing can be wrong; fare rules are authoritative. A source with NO fare rules
+        # (live search data) cannot prove refundability: keep the fare but never claim it.
+        verified = []
+        for o in kept:
+            rules = tools.get_fare_rules(o.offer_id)
+            if rules.refundable or not rules.known:
+                verified.append(o)
         if len(verified) < len(kept):
             notes.append(
                 f"{origin}→{dest}: dropped {len(kept) - len(verified)} flight(s) "
@@ -54,7 +59,7 @@ def price(manifest: Manifest, tools: Toolbox) -> PricedOptions:
     out_day, back_day = event_day - timedelta(days=1), event_day + timedelta(days=1)
     outbound = _verified_flights(tools, AIRPORTS[origin], AIRPORTS[venue], out_day, manifest, notes)
     inbound = _verified_flights(tools, AIRPORTS[venue], AIRPORTS[origin], back_day, manifest, notes)
-    hotels = tools.search_hotels(venue, manifest.constraints.refundable_only)
+    hotels = tools.search_hotels(venue, manifest.constraints.refundable_only, out_day, back_day)
     if not (outbound and inbound and hotels):
         raise PricingError("no options satisfy the constraints (flights/hotels)")
     try:  # suggestions are optional: never let them break pricing

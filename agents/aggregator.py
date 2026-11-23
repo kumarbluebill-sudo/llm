@@ -35,18 +35,27 @@ def aggregate(manifest: Manifest, opts: PricedOptions) -> Itinerary:
     q = _choose(manifest, quotes, warnings)
     pax = manifest.travelers.adults + manifest.travelers.children
     ev = manifest.event
-    if opts.forecast.rain_probability >= 0.6:
+    sources = {q.outbound.source, q.inbound.source, q.hotel.source}
+    data_source = "sample" if sources == {"mock"} else "live" if "mock" not in sources else "mixed"
+    unverified = not (q.outbound.refundable_known and q.inbound.refundable_known and q.hotel.refundable_known)
+    if data_source == "sample" and opts.forecast.rain_probability >= 0.6:  # only sample weather exists
         warnings.append(f"Weather advisory for {ev.venue}: {opts.forecast.summary}")
+    if data_source != "sample":
+        warnings.append("Transfer costs are sample estimates; flight and hotel prices are live Google results")
+    if unverified:
+        warnings.append("Refundability could not be verified for live fares/hotels: check cancellation terms before booking")
     warnings.append("Event/match tickets are not included in the total")
     if opts.activities:
         warnings.append("Activity suggestions are not in the total and are booked on the provider site")
 
-    refundable = manifest.constraints.refundable_only
+    def verified(offer) -> bool | None:
+        return manifest.constraints.refundable_only if offer.refundable_known else None
+
     segments = [
         Segment(type="flight", details={"direction": "out", **q.outbound.model_dump(mode="json")},
-                refundable=refundable, cost=q.outbound.price * pax),
+                refundable=verified(q.outbound), cost=q.outbound.price * pax),
         Segment(type="hotel", details={**q.hotel.model_dump(mode="json"), "nights": opts.nights},
-                refundable=q.hotel.refundable, cost=q.hotel_cost),
+                refundable=q.hotel.refundable if q.hotel.refundable_known else None, cost=q.hotel_cost),
         Segment(type="transfer", details={**opts.route.model_dump(mode="json"), "direction": "in"},
                 cost=q.transfer_cost // 2),
         Segment(type="event", details={"name": ev.name, "venue": ev.venue, "date": ev.date.isoformat(),
@@ -54,7 +63,7 @@ def aggregate(manifest: Manifest, opts: PricedOptions) -> Itinerary:
         Segment(type="transfer", details={**opts.route.model_dump(mode="json"), "direction": "out"},
                 cost=q.transfer_cost // 2),
         Segment(type="flight", details={"direction": "return", **q.inbound.model_dump(mode="json")},
-                refundable=refundable, cost=q.inbound.price * pax),
+                refundable=verified(q.inbound), cost=q.inbound.price * pax),
     ]  # fmt: skip
     return Itinerary(
         itinerary_id=str(uuid.uuid4()),
@@ -66,6 +75,12 @@ def aggregate(manifest: Manifest, opts: PricedOptions) -> Itinerary:
         segments=segments,
         warnings=warnings,
         suggestions=_suggestions(opts),
+        data_source=data_source,
+        bookable=data_source == "sample",
+        bookable_reason=None if data_source == "sample" else (
+            "Prices come from live Google search. Booking is not connected to a supplier, "
+            "so this plan is for comparison only."
+        ),
         booking_actions=[
             BookingAction(label="Book all", action="commit_saga"),
             BookingAction(label="Book flights only", action="partial_commit"),

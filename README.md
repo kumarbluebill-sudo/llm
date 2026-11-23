@@ -36,7 +36,9 @@ runs triage, impact analysis, held rebooking options, entitlements and notificat
 
 Put keys in `env.local` (git-ignored): `VIATOR_SANDBOX_KEY` gives real activity suggestions; `AVIATIONSTACK_API`
 enables live flight-status polling (free plan: ~100 requests/month, the client enforces a budget).
-`RUN_LIVE_TESTS=1 pytest tests/test_live_data.py` runs the opt-in live checks.
+`SERPAPI_API_KEY` gives live Google Flights/Hotels prices (search only; plans built from it are comparison-only and cannot be booked;
+refundability shows as unverified). Free plan = 250 searches/month; `SERPAPI_LIVE=0` forces sample data.
+`RUN_LIVE_TESTS=1 pytest tests/test_live_data.py tests/test_serpapi.py` runs the opt-in live checks.
 
 ## Evaluation and tracing
 

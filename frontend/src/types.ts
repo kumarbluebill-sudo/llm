@@ -42,6 +42,9 @@ export interface Itinerary {
   warnings: string[];
   booking_actions: { label: string; action: string }[];
   suggestions: Suggestion[];
+  data_source: "sample" | "mixed" | "live";
+  bookable: boolean;
+  bookable_reason: string | null;
 }
 
 export type Stage = "idle" | "planning" | "pricing" | "done" | "error";

@@ -30,7 +30,7 @@ from saga.reconcile import run_reconciliation
 from saga.service import BookingService, build_service, status
 
 load_env()  # local env files; real environment variables win
-app = FastAPI(title="Travel LLM", version="0.8.0")
+app = FastAPI(title="Travel LLM", version="0.9.0")
 app.add_middleware(
     CORSMiddleware,
     # Comma-separated origins, e.g. the Netlify site. Local dev uses the Vite proxy.
@@ -165,6 +165,8 @@ async def book(req: BookRequest) -> dict:
     if quote is None or time.monotonic() - quote[0] > QUOTE_TTL_S:
         raise HTTPException(status_code=410, detail="Quote expired or unknown; plan again")
     itinerary = quote[1]
+    if not itinerary.bookable:
+        raise HTTPException(status_code=422, detail=itinerary.bookable_reason or "This plan cannot be booked")
     if not itinerary.within_budget:
         raise HTTPException(status_code=422, detail="Itinerary exceeds the budget; adjust the plan")
     booking = BookingRequest.from_itinerary(

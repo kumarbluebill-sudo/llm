@@ -21,3 +21,4 @@ Rules: idempotency wrapper on every mutating call; Pydantic + policy check befor
 - Not yet verified: real Claude planner calls, public deployment of the API.
 - v0.7 eval + hardening: 320-case golden set, 45 red-team checks, OpenTelemetry spans, reconciliation job (`POST /admin/reconcile`, needs ADMIN_TOKEN; not yet scheduled), input hardening. Real-Claude eval still pending. See docs/EVAL.md.
 - v0.8 live data: Viator activity suggestions (live, sandbox), AviationStack status client + poller (quota-guarded), env-file loading. Flights/hotels/fares are STILL mock (needs Amadeus or similar). Suggestions are not booked by the saga.
+- v0.9 SerpApi (Google Flights/Hotels) live prices: real DEL->DGH fares and Dharamshala hotel rates. SEARCH ONLY: no fare rules, so refundability is reported as unverified and live plans are NOT bookable (the saga only talks to mock suppliers). 250 searches/month on the free plan (client keeps a 30-search reserve).

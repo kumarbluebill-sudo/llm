@@ -19,7 +19,7 @@ export function describe(s: Segment): Card {
         label: d.direction === "out" ? "Outbound flight" : "Return flight",
         title: `${str(d.origin)} → ${str(d.dest)}`,
         lines: [
-          str(d.day),
+          `${str(d.day)} · ${str(d.depart)}${d.carrier ? ` · ${str(d.carrier)}` : ""}${d.flight_number ? ` ${str(d.flight_number)}` : ""}`,
           `${inr(Number(d.price))} per traveller`,
           Number(d.layovers) === 0 ? "Non-stop" : `${str(d.layovers)} stop`,
         ],

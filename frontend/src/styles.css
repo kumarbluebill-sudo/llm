@@ -114,3 +114,8 @@ button.secondary { background: transparent; color: var(--ink); border: 1px solid
 .muted { display: block; margin-top: 8px; color: var(--muted); }
 .card footer a { color: var(--accent); font-weight: 600; text-decoration: none; }
 .card footer a:hover { text-decoration: underline; }
+
+.source { margin-left: 10px; font-size: 0.8rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.source.live { border-color: var(--ok); color: var(--ok); }
+.badge.unknown { border-color: var(--line); color: var(--muted); }
+.notbookable { margin: 0; padding: 10px 12px; background: var(--warn-bg); border-radius: 10px; }

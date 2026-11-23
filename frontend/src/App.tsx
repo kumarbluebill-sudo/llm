@@ -108,6 +108,9 @@ function ItineraryView({ it }: { it: Itinerary }) {
           <span className={it.within_budget ? "ok" : "bad"}>
             {it.within_budget ? "Within budget" : "Over budget"}
           </span>
+          <span className={`source ${it.data_source}`}>
+            {it.data_source === "live" ? "Live Google prices" : it.data_source === "mixed" ? "Part live, part sample" : "Sample data"}
+          </span>
         </div>
         <strong>{inr(it.total_cost)}</strong>
       </div>
@@ -132,6 +135,9 @@ function ItineraryView({ it }: { it: Itinerary }) {
               <footer>
                 <span>{s.cost > 0 ? inr(s.cost) : "—"}</span>
                 {s.refundable === true && <span className="badge">Refundable</span>}
+                {s.refundable === null && (s.type === "flight" || s.type === "hotel") && (
+                  <span className="badge unknown" title="This data source has no cancellation terms">Terms unverified</span>
+                )}
               </footer>
             </article>
           );
@@ -215,7 +221,10 @@ function BookingPanel({ it }: { it: Itinerary }) {
 
   return (
     <div className="booking">
-      {!id && (
+      {!id && !it.bookable && (
+        <p className="notbookable">{it.bookable_reason ?? "This plan cannot be booked."}</p>
+      )}
+      {!id && it.bookable && (
         <>
           <button onClick={book} disabled={starting || !it.within_budget}>
             {starting ? "Starting…" : `Book flights and hotel (${inr(bookable)})`}

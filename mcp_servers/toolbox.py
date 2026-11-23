@@ -12,6 +12,13 @@ from mcp_servers.mock_suppliers import (
 )
 from mcp_servers.models import Activity, FareRules, FlightOffer, Forecast, HotelOffer, Route
 from mcp_servers.resilience import Guarded
+from mcp_servers.serpapi import (
+    HybridFlights,
+    HybridHotels,
+    SerpApiClient,
+    SerpApiFlights,
+    SerpApiHotels,
+)
 from mcp_servers.viator import ViatorActivities, pick_credentials
 
 
@@ -32,8 +39,10 @@ class Toolbox:
     def get_fare_rules(self, offer_id: str) -> FareRules:
         return self._flights.call("get_fare_rules", offer_id, cacheable=True)
 
-    def search_hotels(self, venue: str, refundable_only: bool = True) -> list[HotelOffer]:
-        return self._hotels.call("search_hotels", venue, refundable_only, cacheable=True)
+    def search_hotels(
+        self, venue: str, refundable_only: bool = True, checkin: date | None = None, checkout: date | None = None
+    ) -> list[HotelOffer]:
+        return self._hotels.call("search_hotels", venue, refundable_only, checkin, checkout, cacheable=True)
 
     def get_route(self, airport: str, venue: str) -> Route:
         return self._transport.call("get_route", airport, venue, cacheable=True)
@@ -65,4 +74,8 @@ def build_toolbox() -> Toolbox:
     if creds and os.getenv("VIATOR_LIVE", "1") != "0":
         key, base = creds
         tb._activities = Guarded(ViatorActivities(key, base), cache_ttl=900, retries=1)
+    serp = SerpApiClient.from_env() if os.getenv("SERPAPI_LIVE", "1") != "0" else None
+    if serp is not None:  # live Google prices (search only); 1 hour cache keeps the 250/month quota alive
+        tb._flights = Guarded(HybridFlights(SerpApiFlights(serp)), cache_ttl=3600, retries=0)
+        tb._hotels = Guarded(HybridHotels(SerpApiHotels(serp)), cache_ttl=3600, retries=0)
     return tb
