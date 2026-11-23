@@ -26,4 +26,10 @@ docker compose -f infra/docker-compose.yml up -d --build   # postgres, redis, te
 Without `TEMPORAL_HOST` + `POSTGRES_URL` the API runs the same saga in-process with an in-memory store.
 Suppliers and payments are mocks (`saga/mock_providers.py`); Razorpay test mode is not wired yet.
 
+## Disruption simulation (API)
+
+After a booking is `TICKETED`: `POST /disrupt/{booking_id}` with `{"type": "CANCELLATION", "notice_hours": 3}`
+runs triage, impact analysis, held rebooking options, entitlements and notification; then
+`POST /disruption/{case_id}/choose` (or `/dismiss`). In-process mode only.
+
 Golden rule: the LLM proposes, deterministic code commits, the LLM never touches money.

@@ -12,6 +12,9 @@ class FlightOffer(BaseModel):
     price: int  # INR per passenger
     refundable_listed: bool  # what the search listing claims
     layovers: int
+    depart: str = "09:00"  # local HH:MM
+    duration_min: int = 90
+    carrier: str = "IndiGo"
 
 
 class FareRules(BaseModel):

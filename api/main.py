@@ -4,6 +4,7 @@ import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException, Query
@@ -16,12 +17,15 @@ from agents.llm import AnthropicLLM, LLMClient, MockLLM
 from agents.planner import PlannerError, plan
 from agents.pricer import PricingError, price
 from api.schemas import Itinerary, PlanRequest, PlanResponse
+from disruption.manager import DisruptionManager
+from disruption.models import DisruptionSignal, SignalType, Trip
+from disruption.notify import RecordingSender
 from mcp_servers.resilience import SupplierUnavailable
 from mcp_servers.toolbox import Toolbox, mock_toolbox
 from saga.models import BookingRequest
 from saga.service import BookingService, build_service, status
 
-app = FastAPI(title="Travel LLM", version="0.5.0")
+app = FastAPI(title="Travel LLM", version="0.6.0")
 app.add_middleware(
     CORSMiddleware,
     # Comma-separated origins, e.g. the Netlify site. Local dev uses the Vite proxy.
@@ -56,6 +60,19 @@ def remember_quote(it: Itinerary) -> None:
 @lru_cache(maxsize=1)
 def get_booking_service() -> BookingService:
     return build_service()
+
+
+_TRIPS: dict[str, Trip] = {}
+
+
+@lru_cache(maxsize=1)
+def get_disruption_manager() -> DisruptionManager:
+    svc = get_booking_service()
+    acts = getattr(svc, "acts", None)
+    if acts is None:
+        raise HTTPException(status_code=501, detail="Disruption simulation needs in-process mode")
+    # Mock traveller notifications; real push/SMS/WhatsApp/email senders come later.
+    return DisruptionManager(_TRIPS, get_toolbox(), acts, RecordingSender())
 
 
 def _sse(event: str, data: dict) -> str:
@@ -137,6 +154,9 @@ async def book(req: BookRequest) -> dict:
         booking_id=str(uuid.uuid4()),
         acknowledged_nonrefundable=req.acknowledged_nonrefundable,
     )
+    _TRIPS[booking.booking_id] = Trip.from_itinerary(
+        itinerary, booking.booking_id, payment_token=req.payment_token
+    )
     await get_booking_service().start(booking)
     return {"booking_id": booking.booking_id, "state": "QUOTED"}
 
@@ -158,3 +178,62 @@ async def booking_approval(booking_id: str, req: ApprovalRequest) -> dict:
         raise HTTPException(status_code=409, detail=f"Booking is {st['state']}, not awaiting approval")
     await get_booking_service().approve(booking_id, req.decision)
     return {"booking_id": booking_id, "decision": req.decision}
+
+
+class DisruptRequest(BaseModel):
+    type: SignalType
+    delay_minutes: int = Field(default=0, ge=0)
+    notice_hours: float | None = None
+    flight: str = Field(default="out", pattern="^(out|return)$")
+
+
+class ChooseRequest(BaseModel):
+    option_id: str
+
+
+@app.post("/disrupt/{booking_id}")
+def disrupt(booking_id: str, req: DisruptRequest) -> dict:
+    """Inject a test disruption into a ticketed booking and run the full pipeline."""
+    trip = _TRIPS.get(booking_id)
+    st = status(get_booking_service().store, booking_id)
+    if trip is None or st is None:
+        raise HTTPException(status_code=404, detail="Unknown booking")
+    if not st["done"] or st["state"] != "TICKETED":
+        raise HTTPException(status_code=409, detail=f"Booking is {st['state']}; only ticketed bookings can be disrupted")
+    node = trip.node("flight_out" if req.flight == "out" else "flight_return")
+    now = datetime.now(UTC)
+    sig = DisruptionSignal(
+        signal_id=uuid.uuid4().hex, type=req.type, flight_ref=node.ref or "",
+        delay_minutes=req.delay_minutes, notice_hours=req.notice_hours,
+        source="test", occurred_at=now, received_at=now,
+    )  # fmt: skip
+    return get_disruption_manager().handle(sig).model_dump(mode="json")
+
+
+@app.get("/disruption/{case_id}")
+def disruption_case(case_id: str) -> dict:
+    case = get_disruption_manager().cases.get(case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="Unknown case")
+    return case.model_dump(mode="json")
+
+
+@app.post("/disruption/{case_id}/choose")
+def disruption_choose(case_id: str, req: ChooseRequest) -> dict:
+    mgr = get_disruption_manager()
+    if case_id not in mgr.cases:
+        raise HTTPException(status_code=404, detail="Unknown case")
+    try:
+        return mgr.choose(case_id, req.option_id).model_dump(mode="json")
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="Unknown option") from e
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+@app.post("/disruption/{case_id}/dismiss")
+def disruption_dismiss(case_id: str) -> dict:
+    mgr = get_disruption_manager()
+    if case_id not in mgr.cases:
+        raise HTTPException(status_code=404, detail="Unknown case")
+    return mgr.dismiss(case_id).model_dump(mode="json")

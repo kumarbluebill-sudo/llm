@@ -125,3 +125,43 @@ def test_booking_unknown_is_404_and_approval_conflict_is_409():
         _wait_for(c, bid, lambda s: s["done"])
         assert c.post(f"/booking/{bid}/approval", json={"decision": "approved"}).status_code == 409
         assert c.post(f"/booking/{bid}/approval", json={"decision": "maybe"}).status_code == 422
+
+
+# --- disruption --------------------------------------------------------------
+def _booked(c, q="RCB vs GT, Dharamshala, 2 people, 150k"):
+    it = _plan(c, q)
+    bid = c.post("/book", json={"itinerary_id": it["itinerary_id"], "payment_token": "tok_test"}).json()["booking_id"]
+    _wait_for(c, bid, lambda s: s["done"])
+    return bid
+
+
+def test_disrupt_cancellation_returns_held_options_then_choose():
+    with TestClient(app) as c:
+        bid = _booked(c)
+        r = c.post(f"/disrupt/{bid}", json={"type": "CANCELLATION", "notice_hours": 3})
+        assert r.status_code == 200
+        case = r.json()
+        assert case["severity"] == "CRITICAL" and case["status"] == "AWAITING_APPROVAL"
+        assert case["options"] and all(o["hold_id"] for o in case["options"])
+        assert case["metrics"]["time_to_first_option_s"] < 90
+        # DGCA: always refund-or-rebook; cash compensation only if no alternate departs within 2h
+        assert any(e["kind"] == "refund_or_rebook" for e in case["entitlements"])
+        assert len(case["claims"]) == sum(e["kind"] == "compensation" for e in case["entitlements"])
+        got = c.get(f"/disruption/{case['case_id']}").json()
+        assert got["case_id"] == case["case_id"]
+        done = c.post(f"/disruption/{case['case_id']}/choose", json={"option_id": case["options"][0]["option_id"]})
+        assert done.status_code == 200 and done.json()["status"] == "RESOLVED"
+        again = c.post(f"/disruption/{case['case_id']}/choose", json={"option_id": case["options"][0]["option_id"]})
+        assert again.status_code == 409
+
+
+def test_disrupt_low_delay_and_dismiss_and_errors():
+    with TestClient(app) as c:
+        bid = _booked(c)
+        low = c.post(f"/disrupt/{bid}", json={"type": "DELAY", "delay_minutes": 20, "flight": "return"}).json()
+        assert low["severity"] == "LOW" and low["options"] == []
+        case = c.post(f"/disrupt/{bid}", json={"type": "CANCELLATION", "notice_hours": 2}).json()
+        assert c.post(f"/disruption/{case['case_id']}/dismiss").json()["status"] == "DISMISSED"
+        assert c.post(f"/disruption/{case['case_id']}/choose", json={"option_id": "x"}).status_code == 409
+        assert c.post("/disrupt/missing", json={"type": "DELAY"}).status_code == 404
+        assert c.get("/disruption/missing").status_code == 404

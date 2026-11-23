@@ -10,6 +10,8 @@ _REAL_REFUNDABLE = [False, False, True, True]
 _FLIGHT_FACTORS = [0.8, 0.9, 1.0, 1.4]
 _HOTEL_FACTORS = [1.0, 1.5, 2.2, 3.5]
 _HOTEL_REFUNDABLE = [False, True, True, True]
+_DEPART = ["06:15", "09:40", "13:05", "18:30"]
+_CARRIERS = ["SpiceJet", "IndiGo", "Air India", "Akasa Air"]
 
 
 def _seed(*parts: object) -> int:
@@ -46,6 +48,9 @@ class MockFlights(_Flaky):
                     price=round(base * factor),
                     refundable_listed=_LISTED_REFUNDABLE[i],
                     layovers=1 if i == 0 else 0,
+                    depart=_DEPART[i],
+                    duration_min=70 + _seed(origin, dest, i) % 80,
+                    carrier=_CARRIERS[i],
                 )
             )
         return offers
