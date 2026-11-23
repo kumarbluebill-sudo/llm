@@ -11,9 +11,11 @@ def test_health():
     assert r.status_code == 200 and r.json() == {"status": "ok"}
 
 
-def test_plan_stub():
-    r = client.post("/plan", json={"query": "RCB vs GT, Dharamshala"})
-    assert r.status_code == 200 and r.json()["status"] == "stub"
+def test_plan_returns_manifest():
+    r = client.post("/plan", json={"query": "RCB vs GT, Dharamshala, 2 people, 25k"})
+    body = r.json()
+    assert r.status_code == 200 and body["status"] == "ok"
+    assert body["manifest"]["event"]["venue"] == "Dharamshala"
 
 
 def test_plan_rejects_short_query():

@@ -45,6 +45,6 @@ class PlanRequest(BaseModel):
 
 
 class PlanResponse(BaseModel):
-    status: Literal["stub"]
+    status: Literal["ok"]
     query: str
     manifest: Manifest | None = None

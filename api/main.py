@@ -1,8 +1,17 @@
-from fastapi import FastAPI
+import os
 
+from fastapi import FastAPI, HTTPException
+
+from agents.llm import AnthropicLLM, LLMClient, MockLLM
+from agents.planner import PlannerError, plan
 from api.schemas import PlanRequest, PlanResponse
 
-app = FastAPI(title="Travel LLM", version="0.1.0")
+app = FastAPI(title="Travel LLM", version="0.2.0")
+
+
+def get_llm() -> LLMClient:
+    # LLM_PROVIDER=anthropic switches to the real model; default is the mock.
+    return AnthropicLLM() if os.getenv("LLM_PROVIDER") == "anthropic" else MockLLM()
 
 
 @app.get("/health")
@@ -11,6 +20,9 @@ def health() -> dict[str, str]:
 
 
 @app.post("/plan", response_model=PlanResponse)
-def plan(req: PlanRequest) -> PlanResponse:
-    # v0.1 stub; the planner agent arrives in v0.2.
-    return PlanResponse(status="stub", query=req.query)
+def plan_trip(req: PlanRequest) -> PlanResponse:
+    try:
+        manifest = plan(req.query, get_llm())
+    except PlannerError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    return PlanResponse(status="ok", query=req.query, manifest=manifest)
