@@ -1,5 +1,6 @@
 import json
 import os
+import secrets
 import time
 import uuid
 from collections import OrderedDict
@@ -7,7 +8,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from functools import lru_cache
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -16,6 +17,7 @@ from agents.aggregator import aggregate
 from agents.llm import AnthropicLLM, LLMClient, MockLLM
 from agents.planner import PlannerError, plan
 from agents.pricer import PricingError, price
+from api.safety import MAX_QUERY_CHARS, looks_like_pan, redact_pan
 from api.schemas import Itinerary, PlanRequest, PlanResponse
 from disruption.manager import DisruptionManager
 from disruption.models import DisruptionSignal, SignalType, Trip
@@ -23,9 +25,10 @@ from disruption.notify import RecordingSender
 from mcp_servers.resilience import SupplierUnavailable
 from mcp_servers.toolbox import Toolbox, mock_toolbox
 from saga.models import BookingRequest
+from saga.reconcile import run_reconciliation
 from saga.service import BookingService, build_service, status
 
-app = FastAPI(title="Travel LLM", version="0.6.0")
+app = FastAPI(title="Travel LLM", version="0.7.0")
 app.add_middleware(
     CORSMiddleware,
     # Comma-separated origins, e.g. the Netlify site. Local dev uses the Vite proxy.
@@ -63,6 +66,7 @@ def get_booking_service() -> BookingService:
 
 
 _TRIPS: dict[str, Trip] = {}
+_BOOKING_BY_QUOTE: dict[str, str] = {}  # one quote can only ever be booked once
 
 
 @lru_cache(maxsize=1)
@@ -80,15 +84,20 @@ def _sse(event: str, data: dict) -> str:
 
 
 @app.get("/plan/stream")
-def plan_stream(query: str = Query(min_length=3)) -> StreamingResponse:
+def plan_stream(query: str = Query(min_length=3, max_length=MAX_QUERY_CHARS)) -> StreamingResponse:
     """Server-sent events: stage -> manifest -> stage -> itinerary -> done (or error)."""
+
+    query = redact_pan(query)  # card numbers never reach the LLM
 
     def events() -> Iterator[str]:
         yield _sse("stage", {"stage": "planning"})
         try:
             manifest = plan(query, get_llm())
-        except PlannerError as e:
-            yield _sse("error", {"message": str(e)})
+        except PlannerError:
+            yield _sse("error", {"message": "Could not turn that into a valid trip request"})
+            return
+        except Exception:  # noqa: BLE001 - LLM provider/network failure
+            yield _sse("error", {"message": "Planner temporarily unavailable"})
             return
         yield _sse("manifest", manifest.model_dump(mode="json"))
         if manifest.event is not None:
@@ -114,12 +123,15 @@ def health() -> dict[str, str]:
 
 @app.post("/plan", response_model=PlanResponse)
 def plan_trip(req: PlanRequest) -> PlanResponse:
+    safe_query = redact_pan(req.query)
     try:
-        manifest = plan(req.query, get_llm())
+        manifest = plan(safe_query, get_llm())
     except PlannerError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        raise HTTPException(status_code=422, detail="Could not turn that into a valid trip request") from e
+    except Exception as e:
+        raise HTTPException(status_code=503, detail="Planner temporarily unavailable") from e
     if manifest.event is None:
-        return PlanResponse(status="ok", query=req.query, manifest=manifest)
+        return PlanResponse(status="ok", query=safe_query, manifest=manifest)
     try:
         itinerary = aggregate(manifest, price(manifest, get_toolbox()))
     except PricingError as e:
@@ -127,12 +139,12 @@ def plan_trip(req: PlanRequest) -> PlanResponse:
     except SupplierUnavailable as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
     remember_quote(itinerary)
-    return PlanResponse(status="ok", query=req.query, manifest=manifest, itinerary=itinerary)
+    return PlanResponse(status="ok", query=safe_query, manifest=manifest, itinerary=itinerary)
 
 
 class BookRequest(BaseModel):
     itinerary_id: str
-    payment_token: str = Field(min_length=3)  # a token from the payment provider, never a card
+    payment_token: str = Field(min_length=3, max_length=200)  # a token from the payment provider, never a card
     acknowledged_nonrefundable: bool = False
 
 
@@ -142,6 +154,11 @@ class ApprovalRequest(BaseModel):
 
 @app.post("/book", status_code=202)
 async def book(req: BookRequest) -> dict:
+    if looks_like_pan(req.payment_token):
+        raise HTTPException(status_code=422, detail="Send a payment token, never a card number")
+    existing = _BOOKING_BY_QUOTE.get(req.itinerary_id)
+    if existing is not None:  # retry / double-click: never create a second purchase
+        return {"booking_id": existing, "state": "QUOTED", "duplicate": True}
     quote = _QUOTES.get(req.itinerary_id)
     if quote is None or time.monotonic() - quote[0] > QUOTE_TTL_S:
         raise HTTPException(status_code=410, detail="Quote expired or unknown; plan again")
@@ -157,6 +174,7 @@ async def book(req: BookRequest) -> dict:
     _TRIPS[booking.booking_id] = Trip.from_itinerary(
         itinerary, booking.booking_id, payment_token=req.payment_token
     )
+    _BOOKING_BY_QUOTE[req.itinerary_id] = booking.booking_id
     await get_booking_service().start(booking)
     return {"booking_id": booking.booking_id, "state": "QUOTED"}
 
@@ -237,3 +255,19 @@ def disruption_dismiss(case_id: str) -> dict:
     if case_id not in mgr.cases:
         raise HTTPException(status_code=404, detail="Unknown case")
     return mgr.dismiss(case_id).model_dump(mode="json")
+
+
+@app.post("/admin/reconcile")
+def admin_reconcile(x_admin_token: str = Header(default="")) -> dict:
+    """Run reconciliation now (a scheduler should call this nightly). Disabled unless ADMIN_TOKEN is set."""
+    expected = os.getenv("ADMIN_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not secrets.compare_digest(x_admin_token, expected):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    acts = getattr(get_booking_service(), "acts", None)
+    if acts is None:
+        raise HTTPException(status_code=501, detail="Reconciliation needs supplier feeds; in-process mode only for now")
+    rep = run_reconciliation(acts.store, acts.supplier.records, acts.payments.auths)
+    return {"checked": rep.checked, "skipped_in_flight": rep.skipped_in_flight, "counts": rep.counts(),
+            "findings": [f.model_dump() for f in rep.findings]}  # fmt: skip

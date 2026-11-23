@@ -32,4 +32,10 @@ After a booking is `TICKETED`: `POST /disrupt/{booking_id}` with `{"type": "CANC
 runs triage, impact analysis, held rebooking options, entitlements and notification; then
 `POST /disruption/{case_id}/choose` (or `/dismiss`). In-process mode only.
 
+## Evaluation and tracing
+
+`python -m evals.run` runs the golden set and red-team checks (see docs/EVAL.md for how to read the results).
+Set `OTEL_TRACES_EXPORTER=console` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) to export traces.
+Reconciliation: `POST /admin/reconcile` with header `x-admin-token` (enabled only when `ADMIN_TOKEN` is set).
+
 Golden rule: the LLM proposes, deterministic code commits, the LLM never touches money.

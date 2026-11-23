@@ -35,3 +35,11 @@ def test_idempotency_upsert():
     store.put_idem(key, "IN_PROGRESS")
     store.put_idem(key, "DONE", {"ok": 1})
     assert store.get_idem(key) == {"status": "DONE", "result": {"ok": 1}}
+
+
+def test_booking_ids_lists_every_booking():
+    store = PostgresStore(os.environ["POSTGRES_URL"])
+    a, b = f"t-{uuid.uuid4().hex[:8]}", f"t-{uuid.uuid4().hex[:8]}"
+    store.append(a, "STATE", "QUOTED")
+    store.append(b, "STATE", "QUOTED")
+    assert {a, b} <= set(store.booking_ids())

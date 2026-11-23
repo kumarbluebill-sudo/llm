@@ -19,3 +19,4 @@ Rules: idempotency wrapper on every mutating call; Pydantic + policy check befor
 - v0.5 booking saga: done against mock suppliers/payments. Real Razorpay test mode and real supplier APIs are pending.
 - v0.6 disruption (detect/triage/impact/options/entitlements/notify/bounded execution): done against mocks, API only (no UI). Entitlement amounts are an unverified summary of DGCA/EU261/UK261 and must be legally checked before real use.
 - Not yet verified: real Claude planner calls, public deployment of the API.
+- v0.7 eval + hardening: 320-case golden set, 45 red-team checks, OpenTelemetry spans, reconciliation job (`POST /admin/reconcile`, needs ADMIN_TOKEN; not yet scheduled), input hardening. Real-Claude eval still pending. See docs/EVAL.md.

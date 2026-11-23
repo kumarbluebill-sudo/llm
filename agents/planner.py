@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from agents.knowledge import retrieve
 from agents.llm import LLMClient
 from api.schemas import Manifest
+from api.telemetry import span
 
 MAX_ATTEMPTS = 3
 
@@ -36,13 +37,18 @@ def plan(query: str, llm: LLMClient) -> Manifest:
     facts = "\n".join(f"- {f}" for f in retrieve(query)) or "- (none)"
     user = f"FACTS:\n{facts}\n\nQUERY: {query}"
     error = ""
-    for _ in range(MAX_ATTEMPTS):
-        prompt = user
-        if error:
-            prompt = f"{user}\n\nYour previous output was invalid: {error}\nReturn corrected JSON only."
-        raw = llm.complete(system, prompt)
-        try:
-            return Manifest.model_validate(extract_json(raw))
-        except (ValueError, TypeError, ValidationError) as e:
-            error = str(e)[:500]
-    raise PlannerError(f"planner failed after {MAX_ATTEMPTS} attempts: {error}")
+    with span("planner.plan", query_chars=len(query)) as sp:
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            prompt = user
+            if error:
+                prompt = f"{user}\n\nYour previous output was invalid: {error}\nReturn corrected JSON only."
+            raw = llm.complete(system, prompt)
+            try:
+                manifest = Manifest.model_validate(extract_json(raw))
+            except (ValueError, TypeError, ValidationError) as e:
+                error = str(e)[:500]
+                continue
+            sp.set_attribute("attempts", attempt)
+            return manifest
+        sp.set_attribute("attempts", MAX_ATTEMPTS)
+        raise PlannerError(f"planner failed after {MAX_ATTEMPTS} attempts: {error}")

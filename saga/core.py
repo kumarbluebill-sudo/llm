@@ -31,7 +31,13 @@ async def run_booking(req: dict, steps: Steps) -> dict:
         return await steps.run(name, {"booking_id": bid, **arg})
 
     try:
-        await state("QUOTED", total_quoted=sum(f["quoted"] for f in req["flights"]) + req["hotel"]["quoted"])
+        resources = [f"{bid}:flight:{f['offer_id']}" for f in req["flights"]]
+        resources.append(f"{bid}:hotel:{req['hotel']['hotel_id']}")
+        await state(
+            "QUOTED",
+            total_quoted=sum(f["quoted"] for f in req["flights"]) + req["hotel"]["quoted"],
+            resources=resources,
+        )
 
         # 1. HOLD everything (cheap to undo)
         held_flights: list[dict] = []

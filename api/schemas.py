@@ -12,13 +12,13 @@ class Event(BaseModel):
 
 
 class Travelers(BaseModel):
-    adults: int = Field(ge=1, default=1)
-    children: int = Field(ge=0, default=0)
+    adults: int = Field(ge=1, le=20, default=1)
+    children: int = Field(ge=0, le=20, default=0)
 
 
 class Budget(BaseModel):
     tier: Literal["budget", "mid", "premium"] = "mid"
-    max_total: int = Field(gt=0)
+    max_total: int = Field(gt=0, le=10_000_000)
     currency: str = "INR"
 
 
@@ -69,7 +69,7 @@ class Itinerary(BaseModel):
 
 
 class PlanRequest(BaseModel):
-    query: str = Field(min_length=3)
+    query: str = Field(min_length=3, max_length=500)
 
 
 class PlanResponse(BaseModel):

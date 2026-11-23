@@ -2,6 +2,7 @@
 Mirrors Temporal's behaviour: transient errors are retried, rejections are not."""
 import asyncio
 
+from api.telemetry import span
 from saga.activities import Activities
 from saga.core import run_booking
 from saga.errors import TransientError
@@ -16,12 +17,16 @@ class DirectSteps:
 
     async def run(self, name: str, arg: dict) -> dict:
         fn = getattr(self._acts, name)
-        for attempt in range(MAX_ATTEMPTS):
-            try:
-                return fn(arg)
-            except TransientError:
-                if attempt == MAX_ATTEMPTS - 1:
-                    raise
+        with span("saga.step", step=name, booking_id=arg.get("booking_id")) as sp:
+            for attempt in range(MAX_ATTEMPTS):
+                try:
+                    result = fn(arg)
+                except TransientError:
+                    if attempt == MAX_ATTEMPTS - 1:
+                        raise
+                    continue
+                sp.set_attribute("attempts", attempt + 1)
+                return result
         raise AssertionError("unreachable")
 
     async def wait_approval(self, timeout_s: int) -> str | None:

@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from api.telemetry import span
 from disruption.autonomy import AutonomyPolicy, Decision
 from disruption.entitlements import Entitlement, FlightContext, draft_claim, entitlements
 from disruption.impact import ImpactReport, analyze
@@ -82,6 +83,14 @@ class DisruptionManager:
 
     # --- pipeline ------------------------------------------------------------
     def handle(self, sig: DisruptionSignal) -> DisruptionCase:
+        with span("disruption.handle", signal_type=sig.type.value, source=sig.source) as sp:
+            case = self._handle(sig)
+            sp.set_attribute("severity", case.severity.value)
+            sp.set_attribute("options", len(case.options))
+            sp.set_attribute("status", case.status)
+            return case
+
+    def _handle(self, sig: DisruptionSignal) -> DisruptionCase:
         trip = next(t for t in self.trips.values() if t.node_for_flight(sig.flight_ref))
         node = trip.node_for_flight(sig.flight_ref)
         assert node is not None
@@ -100,9 +109,10 @@ class DisruptionManager:
         self._log(case, "DETECTED", signal=sig.type.value, severity=severity.value, broken=impact.broken)
 
         if severity is not Severity.LOW:  # OPTIONS with inventory holds
-            case.options = build_options(
-                trip, node, self.toolbox, self.policy, self._hold_fn(trip, case_id), self._clock()
-            )
+            with span("disruption.options"):
+                case.options = build_options(
+                    trip, node, self.toolbox, self.policy, self._hold_fn(trip, case_id), self._clock()
+                )
             first_option_at = self._clock()
             case.metrics["time_to_first_option_s"] = (first_option_at - received).total_seconds()
             self._log(case, "OPTIONS", options=[o.option_id for o in case.options])
@@ -117,9 +127,10 @@ class DisruptionManager:
             draft_claim(e, trip.booking_id, sig.flight_ref) for e in case.entitlements if e.kind == "compensation"
         ]
 
-        case.notification = notify(  # NOTIFY (consent-ordered)
-            trip.booking_id, self._message(case), trip.consent_channels, self.sender
-        )
+        with span("disruption.notify"):
+            case.notification = notify(  # NOTIFY (consent-ordered)
+                trip.booking_id, self._message(case), trip.consent_channels, self.sender
+            )
         if case.notification["delivered_via"] is None:
             case.notes.append("Traveller could not be reached on any consented channel")
         self._log(case, "NOTIFIED", via=case.notification["delivered_via"])
@@ -183,6 +194,7 @@ class DisruptionManager:
         assert node is not None and option.hold_id is not None
         case.chosen_option = option.option_id
         self._log(case, "EXEC_STARTED", option=option.option_id)
+        replaced_key = f"{case.booking_id}:flight:{node.ref}"
         prefix = self._hold_prefix(case.booking_id, case.case_id)
         try:
             self.acts.ticket_flight({"booking_id": prefix, "hold_key": option.hold_id})
@@ -209,7 +221,7 @@ class DisruptionManager:
         node.start, node.end = option.depart_at, option.arrive_at
         if case.status not in ("NEEDS_MANUAL",):
             case.status = "RESOLVED"
-        self._log(case, "RESOLVED", status=case.status)
+        self._log(case, "RESOLVED", status=case.status, new_key=option.hold_id, replaced_key=replaced_key)
         return case
 
     def _charge_delta(self, case: DisruptionCase, trip: Trip, amount: int) -> None:

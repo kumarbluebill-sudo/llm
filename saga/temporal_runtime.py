@@ -5,6 +5,7 @@ from temporalio.client import Client
 from temporalio.exceptions import ApplicationError
 from temporalio.worker import Worker
 
+from api.telemetry import span
 from saga.activities import ACTIVITY_NAMES, Activities
 from saga.errors import SupplierRejected
 from saga.workflow import TASK_QUEUE, TravelBookingWorkflow
@@ -14,7 +15,8 @@ def _make_activity(name: str, fn):
     @activity.defn(name=name)
     def act(arg: dict) -> dict:
         try:
-            return fn(arg)
+            with span("saga.activity", step=name, booking_id=arg.get("booking_id")):
+                return fn(arg)
         except SupplierRejected as e:
             raise ApplicationError(str(e), type="SupplierRejected", non_retryable=True) from e
 

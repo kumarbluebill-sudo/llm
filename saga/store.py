@@ -8,6 +8,7 @@ from typing import Any, Protocol
 class BookingStore(Protocol):
     def append(self, booking_id: str, type: str, state: str | None = None, data: dict | None = None) -> None: ...
     def events(self, booking_id: str) -> list[dict]: ...
+    def booking_ids(self) -> list[str]: ...
     def get_idem(self, key: str) -> dict | None: ...
     def put_idem(self, key: str, status: str, result: Any = None) -> None: ...
 
@@ -41,6 +42,10 @@ class InMemoryStore:
     def events(self, booking_id):
         with self._lock:
             return [dict(e) for e in self._events.get(booking_id, [])]
+
+    def booking_ids(self):
+        with self._lock:
+            return list(self._events)
 
     def get_idem(self, key):
         with self._lock:
@@ -106,6 +111,11 @@ class PostgresStore:
             {"seq": i + 1, "type": r[1], "state": r[2], "data": r[3], "at": r[4].isoformat()}
             for i, r in enumerate(rows)
         ]
+
+    def booking_ids(self):
+        with self._conn() as c:
+            rows = c.execute("SELECT DISTINCT booking_id FROM booking_events ORDER BY booking_id").fetchall()
+        return [r[0] for r in rows]
 
     def get_idem(self, key):
         with self._conn() as c:

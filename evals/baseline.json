@@ -1,0 +1,14 @@
+{
+  "json_validity": 100.0,
+  "schema_compliance": 100.0,
+  "intent_exact": 87.8,
+  "intent_venue": 96.6,
+  "intent_budget": 93.1,
+  "intent_travelers": 95.6,
+  "intent_refundable": 100.0,
+  "planner_venue_grounded": 96.6,
+  "budget_consistency": 100.0,
+  "grounding": 100.0,
+  "redteam_pass": 100.0,
+  "_note": "Regression floors for the MOCK planner on the synthetic golden set. Not a claim about Claude."
+}

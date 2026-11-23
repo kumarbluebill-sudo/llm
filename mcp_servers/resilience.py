@@ -5,6 +5,8 @@ from collections.abc import Callable
 from functools import partial
 from typing import Any
 
+from api.telemetry import span
+
 _MISSING = object()
 
 
@@ -98,14 +100,21 @@ class Guarded:
         self._retries, self._base_delay, self._sleep = retries, base_delay, sleep
 
     def call(self, method: str, *args: Any, cacheable: bool = False) -> Any:
+        with span("supplier.call", method=method) as sp:
+            return self._call(sp, method, args, cacheable)
+
+    def _call(self, sp: Any, method: str, args: tuple, cacheable: bool) -> Any:
         key = (method, args)
         if cacheable:
             hit = self.cache.get(key)
             if hit is not _MISSING:
+                sp.set_attribute("cache_hit", True)
                 return hit
+        sp.set_attribute("cache_hit", False)
         last: Exception | None = None
         for name, target in self.targets:
             breaker = self.breakers[name]
+            sp.set_attribute(f"breaker.{name}", breaker.state)
             if not breaker.allow():
                 continue
             try:
@@ -120,6 +129,7 @@ class Guarded:
                 last = e
                 continue
             breaker.record_success()
+            sp.set_attribute("supplier", name)
             if cacheable:
                 self.cache.set(key, result)
             return result
