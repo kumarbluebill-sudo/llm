@@ -16,6 +16,13 @@ def test_plan_returns_manifest():
     body = r.json()
     assert r.status_code == 200 and body["status"] == "ok"
     assert body["manifest"]["event"]["venue"] == "Dharamshala"
+    it = body["itinerary"]
+    assert it["total_cost"] > 0 and len(it["segments"]) == 6
+
+
+def test_plan_without_destination_has_no_itinerary():
+    r = client.post("/plan", json={"query": "somewhere nice, 20k"})
+    assert r.status_code == 200 and r.json()["itinerary"] is None
 
 
 def test_plan_rejects_short_query():

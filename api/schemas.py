@@ -33,11 +33,39 @@ class Manifest(BaseModel):
 
     trip_id: str
     intent: Literal["event_travel", "leisure", "business"] = "event_travel"
+    origin: str | None = None
     event: Event | None = None
     travelers: Travelers = Travelers()
     budget: Budget
     constraints: Constraints = Constraints()
     segments: list[str] = []
+
+
+class Segment(BaseModel):
+    type: Literal["flight", "hotel", "transfer", "event"]
+    details: dict
+    refundable: bool | None = None
+    cost: int = 0
+
+
+class BookingAction(BaseModel):
+    label: str
+    action: str
+
+
+class Itinerary(BaseModel):
+    """Aggregator output (doc section 6.3)."""
+
+    itinerary_id: str
+    summary: str
+    tier: Literal["budget", "mid", "premium"]
+    total_cost: int
+    currency: str = "INR"
+    within_budget: bool
+    tier_totals: dict[str, int]
+    segments: list[Segment]
+    warnings: list[str] = []
+    booking_actions: list[BookingAction] = []
 
 
 class PlanRequest(BaseModel):
@@ -48,3 +76,4 @@ class PlanResponse(BaseModel):
     status: Literal["ok"]
     query: str
     manifest: Manifest | None = None
+    itinerary: Itinerary | None = None

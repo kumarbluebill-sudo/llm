@@ -16,6 +16,13 @@ FACTS: list[dict[str, str]] = [
 
 CITIES = [f["city"] for f in FACTS]
 
+# Nearest commercial airport per city (Dharamshala is served by Gaggal).
+AIRPORTS = {
+    "Dharamshala": "DGH", "Mumbai": "BOM", "Bengaluru": "BLR", "Chennai": "MAA",
+    "Kolkata": "CCU", "Delhi": "DEL", "Ahmedabad": "AMD", "Hyderabad": "HYD",
+    "Jaipur": "JAI", "Lucknow": "LKO",
+}  # fmt: skip
+
 
 def retrieve(query: str, k: int = 3) -> list[str]:
     low = query.lower()
