@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/plan": "http://localhost:8000",
+      "/book": "http://localhost:8000", // also covers /booking/*
       "/health": "http://localhost:8000",
     },
   },

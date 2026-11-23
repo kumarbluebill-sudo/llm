@@ -31,3 +31,17 @@ export interface Itinerary {
 }
 
 export type Stage = "idle" | "planning" | "pricing" | "done" | "error";
+
+export interface BookingEvent {
+  seq: number;
+  type: string;
+  state: string | null;
+  data: Record<string, unknown>;
+}
+
+export interface BookingStatus {
+  booking_id: string;
+  state: string;
+  done: boolean;
+  events: BookingEvent[];
+}

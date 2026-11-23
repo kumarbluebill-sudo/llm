@@ -102,3 +102,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .total { flex-direction: column; align-items: flex-start; }
   .tiers { grid-template-columns: 1fr; }
 }
+
+.booking { margin-top: 20px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.booking small { display: block; margin-top: 8px; color: var(--muted); }
+.timeline { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+.approval { margin-top: 12px; padding: 12px; background: var(--warn-bg); border-radius: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+.approval ul { width: 100%; margin: 0 0 4px; padding-left: 18px; }
+button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }

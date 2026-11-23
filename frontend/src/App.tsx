@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
-import { streamPlan } from "./api";
+import { useEffect, useRef, useState } from "react";
+import { getBooking, sendApproval, startBooking, streamPlan } from "./api";
 import { describe, inr } from "./format";
-import type { Itinerary, Manifest, Stage, Tier } from "./types";
+import type { BookingStatus, Itinerary, Manifest, Stage, Tier } from "./types";
 
 const EXAMPLES = [
   "RCB vs GT, Dharamshala, 2 people, 25k",
@@ -144,12 +144,108 @@ function ItineraryView({ it }: { it: Itinerary }) {
         </ul>
       )}
 
-      <div className="actions">
-        {it.booking_actions.map((a) => (
-          <button key={a.action} disabled title="Booking arrives in v0.5">{a.label}</button>
-        ))}
-        <small>Booking is not live yet. Prices shown are sample data.</small>
-      </div>
+      <BookingPanel it={it} />
     </section>
+  );
+}
+
+const STATE_TEXT: Record<string, string> = {
+  DRAFT: "Starting…",
+  QUOTED: "Quote locked",
+  HELD: "Flights and hotel held",
+  AWAITING_APPROVAL: "Waiting for your approval",
+  APPROVED: "Approved",
+  AUTHORIZED: "Payment authorised (not charged yet)",
+  CONFIRMED: "Hotel confirmed",
+  TICKETED: "Tickets issued",
+  COMPENSATING: "Something failed, releasing everything…",
+  CANCELLED: "Cancelled. Nothing was charged.",
+  NEEDS_MANUAL: "Needs manual attention from our team",
+};
+
+function BookingPanel({ it }: { it: Itinerary }) {
+  const [id, setId] = useState<string | null>(null);
+  const [status, setStatus] = useState<BookingStatus | null>(null);
+  const [error, setError] = useState("");
+  const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    setId(null);
+    setStatus(null);
+    setError("");
+  }, [it.itinerary_id]);
+
+  useEffect(() => {
+    if (!id) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const st = await getBooking(id);
+        if (stop) return;
+        setStatus(st);
+        if (!st.done) setTimeout(tick, 1000);
+      } catch (e) {
+        if (!stop) setError((e as Error).message);
+      }
+    };
+    tick();
+    return () => {
+      stop = true;
+    };
+  }, [id]);
+
+  async function book() {
+    setError("");
+    setStarting(true);
+    try {
+      setId((await startBooking(it.itinerary_id)).booking_id);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  const reasons = (status?.events.filter((e) => e.state === "AWAITING_APPROVAL").at(-1)?.data.reasons ??
+    []) as string[];
+  const flightsAndHotel = it.segments.filter((s) => s.type === "flight" || s.type === "hotel");
+  const bookable = flightsAndHotel.reduce((n, s) => n + s.cost, 0);
+
+  return (
+    <div className="booking">
+      {!id && (
+        <>
+          <button onClick={book} disabled={starting || !it.within_budget}>
+            {starting ? "Starting…" : `Book flights and hotel (${inr(bookable)})`}
+          </button>
+          <small>
+            {it.within_budget
+              ? "Demo only: no real booking or payment happens. Transfers are not booked."
+              : "This plan is over budget. Adjust the request to book."}
+          </small>
+        </>
+      )}
+      {error && <p className="error" role="alert">{error}</p>}
+      {status && (
+        <div role="status">
+          <h3>{STATE_TEXT[status.state] ?? status.state}</h3>
+          <ol className="timeline">
+            {status.events
+              .filter((e) => e.state)
+              .map((e) => <li key={e.seq}>{STATE_TEXT[e.state!] ?? e.state}</li>)}
+            {status.state === "TICKETED" && status.done && <li>Payment captured</li>}
+          </ol>
+          {status.state === "AWAITING_APPROVAL" && (
+            <div className="approval">
+              <ul>{reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+              <button onClick={() => id && sendApproval(id, "approved")}>Approve and continue</button>
+              <button className="secondary" onClick={() => id && sendApproval(id, "rejected")}>
+                Reject and release
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

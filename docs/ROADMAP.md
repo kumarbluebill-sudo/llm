@@ -13,3 +13,8 @@
 | v2 | later | Optional QLoRA fine-tune | Beats hosted baseline at lower cost |
 
 Rules: idempotency wrapper on every mutating call; Pydantic + policy check before any supplier/payment call; tests first for saga, entitlements, budget; one PR per milestone, tag `vX.Y.Z`.
+
+## Status
+- v0.1 skeleton, v0.2 planner (mock LLM), v0.3 pricer/aggregator (mock suppliers), v0.4 UI + SSE: done.
+- v0.5 booking saga: done against mock suppliers/payments. Real Razorpay test mode and real supplier APIs are pending.
+- Not yet verified: real Claude planner calls, public deployment of the API.

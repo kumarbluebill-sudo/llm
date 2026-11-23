@@ -1,4 +1,4 @@
-import type { Itinerary, Manifest, Stage } from "./types";
+import type { BookingStatus, Itinerary, Manifest, Stage } from "./types";
 
 // Empty in dev (Vite proxy); set VITE_API_URL to the deployed API origin in production.
 const API = import.meta.env.VITE_API_URL ?? "";
@@ -32,4 +32,35 @@ export function streamPlan(query: string, h: Handlers): () => void {
     h.onError(data ? JSON.parse(data).message : "Connection to the planner was lost.");
   });
   return finish;
+}
+
+async function json<T>(res: Response): Promise<T> {
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `Request failed (${res.status})`);
+  return body as T;
+}
+
+export async function startBooking(itineraryId: string): Promise<{ booking_id: string }> {
+  return json(
+    await fetch(`${API}/book`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      // Demo token. A real payment provider's hosted fields would produce this; cards never reach us.
+      body: JSON.stringify({ itinerary_id: itineraryId, payment_token: "tok_demo" }),
+    }),
+  );
+}
+
+export async function getBooking(id: string): Promise<BookingStatus> {
+  return json(await fetch(`${API}/booking/${id}`));
+}
+
+export async function sendApproval(id: string, decision: "approved" | "rejected") {
+  return json(
+    await fetch(`${API}/booking/${id}/approval`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision }),
+    }),
+  );
 }

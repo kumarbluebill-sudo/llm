@@ -13,4 +13,15 @@ services:
     ports: ["7233:7233"]
   api:
     build: ..
+    environment:
+      TEMPORAL_HOST: temporal:7233
+      POSTGRES_URL: postgresql://travel:travel@postgres:5432/travel
+    depends_on: [postgres, temporal]
     ports: ["8000:8000"]
+  worker:
+    build: ..
+    command: ["python", "scripts/run_worker.py"]
+    environment:
+      TEMPORAL_HOST: temporal:7233
+      POSTGRES_URL: postgresql://travel:travel@postgres:5432/travel
+    depends_on: [postgres, temporal]
