@@ -1,0 +1,9 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+data/chroma/
+dist/
+.pytest_cache/
+.ruff_cache/
