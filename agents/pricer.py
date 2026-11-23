@@ -33,7 +33,10 @@ def _verified_flights(
         # The listing can be wrong; fare rules are authoritative.
         verified = [o for o in kept if tools.get_fare_rules(o.offer_id).refundable]
         if len(verified) < len(kept):
-            notes.append(f"Dropped {len(kept) - len(verified)} flight(s) with non-refundable fare rules")
+            notes.append(
+                f"{origin}→{dest}: dropped {len(kept) - len(verified)} flight(s) "
+                "with non-refundable fare rules"
+            )
         kept = verified
     return kept
 
